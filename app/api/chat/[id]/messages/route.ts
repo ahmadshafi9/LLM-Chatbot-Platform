@@ -1,5 +1,5 @@
-import { db } from "../../../../lib/db";
-import { GET_CHAT_MESSAGES } from "../../../../constants/queries";
+import { db } from "../../../../../lib/db";
+import { GET_CHAT_MESSAGES } from "../../../../../constants/queries";
 
 export async function GET(
   req: Request,

@@ -62,25 +62,18 @@ export async function POST(req: Request, title: string, tempChatId: number) {
 }
 
 export async function GET(
-    req: Request,
-    { params }: { params: { chatid: number } }
+    
 ) {
     try {
-        const chatId = Number(params.chatid);
-
-        if (!chatId) {
-            return NextResponse.json(
-                { error: "unable to find chat (chatid not found)" },
-                { status: 400 }
-            );
-        }
-        const all_chats = db
+        
+        const allChats =  db
             .prepare(GET_ALL_CHATS)
-            .run()
+            .all()
 
-        return NextResponse.json({
-            all_chats
-        });
+        return NextResponse.json(
+                    allChats
+
+        );
     } catch (error) {
         return NextResponse.json(
             {

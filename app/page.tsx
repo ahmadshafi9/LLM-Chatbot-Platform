@@ -1,19 +1,39 @@
-'use client';
+"use client";
+
 import "./styles.css";
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation';
+ 
+// type ALL_CHATS = {
+//   id: string
+//   title: string
+// }
+ 
+// export const getServerSideProps = (async () => {
+//   // Fetch data from external API
+//   const res = await fetch('@/chats.sqlite')
+//   const all_chats: ALL_CHATS = await res.json()
+//   // Pass data to the page via props
+//   return { all_chats: { all_chats } }
+// }) satisfies GetServerSideProps<{ all_chats: ALL_CHATS }>  cant do all this becaus eit wont work for my nextjs layout
 
-async function get_all_chats(params:string) {
-  const res = await fetch("api/chat/[id]");
+
+async function getChatMessages(id: string) {
+  const res = await fetch(`/api/chat/${id}/messages`);
   return res.json();
-  
+}
+
+async function fetchAllChats() {
+  const chats = await fetch('/api/chat').then(res => res.json())
+  return chats;
 }
 
 export default function Page() {
-  const router = useRouter();
-  const { id } = router.query;
+  const [activeChatId, setActiveChatId] = useState();
+  const [allChats, setAllChats] = useState<{id: string, title: string}[]>([])
+
 
   const [initialMessages, setInitialMessages] = useState([]);
 
@@ -24,17 +44,16 @@ export default function Page() {
     messages: initialMessages,
   });
 
+  // fetch messages when id changes
   useEffect(() => {
-    if (!id) return;
+    if (!activeChatId) return;
 
-    // reset messages immediately when id changes
     setInitialMessages([]);
 
-    // fetch messages for new id
-    get_all_chats(id as string).then((data) => {
-      setInitialMessages(data);
+    getChatMessages(activeChatId).then(data => {
+      setInitialMessages(activeChatId);
     });
-  }, [id]); // [dependency array so when id changes it runs]
+  }, [activeChatId]);
 
   const [input, setInput] = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
@@ -67,110 +86,103 @@ export default function Page() {
   }, [messages, status, isAtBottom]);
 
   useEffect(() => {
-    if (!chat) return // slug not ready yet
+    fetchAllChats().then(res => {
+      setAllChats(res)
+    })
+  }, [])
 
-    fetch(`/api/chat/messages/${chat}`)
-      .then(data => messages(data))
-      .catch(err => console.error(err))
-  }, [chat])
+  console.log(allChats)
 
-});
-
-
-
-return (
-  <div className='parent-container'>
-    <div className="history">
-      {/* <div id="chat">
-        {messages.map((msg, index) => (
-          <p key={index}><strong>{msg.user}:</strong> {msg.text}</p>
-        ))}
-      </div> */}
-      <div>
-        <p>Post: {router.query.chat}</p>
+  return (
+    <div className='parent-container'>
+      <div className="history">
+        <ul>
+      {allChats?.map((chat) => (
+        <li key={chat.id}>{chat.title}</li>
+      )) ?? null}
+    </ul>
       </div>
-    </div>
 
-    <div className="rest">
-      <div className="chat" ref={chatRef}>
-        {messages.map(message => (
-          <div
-            className={message.role === "user" ? "chatUser" : "chatAI"}
-            key={message.id}
+      <div className="rest">
+        <div className="chat" ref={chatRef}>
+          {messages.map(message => (
+            <div
+              className={message.role === "user" ? "chatUser" : "chatAI"}
+              key={message.id}
+            >
+              {message.role === 'user' ? <>User: </> : <>AI: </>}
+              {message.parts.map((part, index) =>
+                part.type === 'text'
+                  ? <span key={index}>{part.text}</span>
+                  : null
+              )}
+            </div>
+          ))}
+
+          {status === 'submitted' && (
+            <div className="chatAI thinking">
+              <span>AI:</span>
+              <div className="spinner"></div>
+              <span className="thinking-text">thinking...</span>
+            </div>
+          )}
+        </div>
+
+        {!isAtBottom && (
+          <button
+            onClick={() =>
+              chatRef.current?.scrollTo({
+                top: chatRef.current.scrollHeight,
+                behavior: "smooth",
+              })
+            }
+            style={{
+              position: "fixed",
+              bottom: "80px",
+              right: "20px",
+            }}
           >
-            {message.role === 'user' ? <>User: </> : <>AI: </>}
-            {message.parts.map((part, index) =>
-              part.type === 'text'
-                ? <span key={index}>{part.text}</span>
-                : null
-            )}
-          </div>
-        ))}
-
-        {status === 'submitted' && (
-          <div className="chatAI thinking">
-            <span>AI:</span>
-            <div className="spinner"></div>
-            <span className="thinking-text">thinking...</span>
-          </div>
+            Jump to latest ↓
+          </button>
         )}
-      </div>
 
-      {!isAtBottom && (
-        <button
-          onClick={() =>
-            chatRef.current?.scrollTo({
-              top: chatRef.current.scrollHeight,
-              behavior: "smooth",
-            })
-          }
-          style={{
-            position: "fixed",
-            bottom: "80px",
-            right: "20px",
-          }}
-        >
-          Jump to latest ↓
-        </button>
-      )}
-
-      <form
-        onSubmit={e => {
-          e.preventDefault();
-          if (input.trim()) {
-            sendMessage({ text: input });
-            setInput('');
-          }
-        }}
-      >
-        <textarea
-          className="input"
-          value={input}
-          rows={1}
-          onChange={e => {
-            setInput(e.target.value);
-            e.target.style.height = "auto";
-            e.target.style.height = e.target.scrollHeight + "px";
-          }}
-          onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (input.trim()) {
-                sendMessage({ text: input });
-                setInput('');
-              }
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            if (input.trim()) {
+              sendMessage({ text: input });
+              setInput('');
             }
           }}
-          disabled={status !== 'ready'}
-          placeholder="Message ahmadGPT..."
-        />
-        <div className="submit">
-          <button type="submit" disabled={status !== 'ready'}>
-            {status === 'submitted' && <div className="submit-spinner"></div>}
-          </button>
-        </div>
-      </form>
+        >
+          <textarea
+            className="input"
+            value={input}
+            rows={1}
+            onChange={e => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = e.target.scrollHeight + "px";
+            }}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (input.trim()) {
+                  sendMessage({ text: input });
+                  setInput('');
+                }
+              }
+            }}
+            disabled={status !== 'ready'}
+            placeholder="Message ahmadGPT..."
+          />
+          <div className="submit">
+            <button type="submit" disabled={status !== 'ready'}>
+              {status === 'submitted' && <div className="submit-spinner"></div>}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  </div>
-);
+  );
 }
