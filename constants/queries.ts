@@ -6,7 +6,7 @@ export const GET_CHAT = `
 `;
 
 export const GET_CHAT_MESSAGES = `
-  SELECT messageId, chatId, message, created_at
+  SELECT messageId, chatId, message, role, created_at
   FROM chatMessages
   WHERE chatId = ?
   ORDER BY created_at ASC;
@@ -22,8 +22,8 @@ export const INSERT_CHAT = `
 `;
 
 export const INSERT_CHAT_MESSAGE = `
-  INSERT INTO chatMessages (chatId, message)
-  VALUES (?, ?);
+  INSERT INTO chatMessages (chatId, message, role)
+  VALUES (?, ?, ?);
 `;
 
 

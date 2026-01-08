@@ -3,10 +3,10 @@ import { GET_CHAT_MESSAGES } from "../../../../../constants/queries";
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const chatId = Number(params.id);
+    const chatId = Number((await params).id);
 
     const messages = db
       .prepare(GET_CHAT_MESSAGES)
@@ -18,7 +18,6 @@ export async function GET(
                 { status: 404 }
             );
         }
-
 
     return new Response(JSON.stringify(messages), {
       status: 200,

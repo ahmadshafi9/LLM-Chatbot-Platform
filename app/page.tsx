@@ -5,24 +5,21 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
- 
-// type ALL_CHATS = {
-//   id: string
-//   title: string
-// }
- 
-// export const getServerSideProps = (async () => {
-//   // Fetch data from external API
-//   const res = await fetch('@/chats.sqlite')
-//   const all_chats: ALL_CHATS = await res.json()
-//   // Pass data to the page via props
-//   return { all_chats: { all_chats } }
-// }) satisfies GetServerSideProps<{ all_chats: ALL_CHATS }>  cant do all this becaus eit wont work for my nextjs layout
 
+// fetch the role, message parts and everything
 
 async function getChatMessages(id: string) {
-  const res = await fetch(`/api/chat/${id}/messages`);
+  const res = await fetch(`/api/chat/${id}/messages`,{
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    role: "user"
+  })
+});
   return res.json();
+  
 }
 
 async function fetchAllChats() {
@@ -31,8 +28,8 @@ async function fetchAllChats() {
 }
 
 export default function Page() {
-  const [activeChatId, setActiveChatId] = useState();
-  const [allChats, setAllChats] = useState<{id: string, title: string}[]>([])
+  const [activeChatId, setActiveChatId] = useState<string>();
+  const [allChats, setAllChats] = useState<{chatId: string, title: string}[]>([])
 
 
   const [initialMessages, setInitialMessages] = useState([]);
@@ -51,11 +48,11 @@ export default function Page() {
     setInitialMessages([]);
 
     getChatMessages(activeChatId).then(data => {
-      setInitialMessages(activeChatId);
+      setInitialMessages(data);
     });
   }, [activeChatId]);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState();
   const chatRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
@@ -91,14 +88,18 @@ export default function Page() {
     })
   }, [])
 
-  console.log(allChats)
+  console.log(initialMessages)
 
   return (
     <div className='parent-container'>
       <div className="history">
         <ul>
       {allChats?.map((chat) => (
-        <li key={chat.id}>{chat.title}</li>
+        <li key={chat.chatId}>
+          <button onClick={() => setActiveChatId(chat.chatId)}>
+            {chat.title} - {chat.chatId}
+            </button>
+          </li>
       )) ?? null}
     </ul>
       </div>

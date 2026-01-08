@@ -1,4 +1,4 @@
-import { GET_ALL_CHATS } from "@/constants/queries";
+import { GET_ALL_CHATS } from "../constants/queries.ts";
 import Database from "better-sqlite3";
 import path from "path";
 
@@ -12,4 +12,3 @@ db.pragma("foreign_keys = ON");
 export function get_all_chats(db) {
   return db.prepare(GET_ALL_CHATS).all();
 }
-export const chats = get_all_chats(db);

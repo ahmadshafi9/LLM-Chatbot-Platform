@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS chatMessages (
   messageId INTEGER PRIMARY KEY AUTOINCREMENT,
   chatId INTEGER NOT NULL,
   message TEXT NOT NULL,
+  role TEXT DEFAULT 'user',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (chatId) REFERENCES chats(chatId) ON DELETE CASCADE
 );
 `);
 
 console.log("Migrations ran successfully ✅");
-

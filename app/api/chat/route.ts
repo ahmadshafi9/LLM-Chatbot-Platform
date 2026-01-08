@@ -21,6 +21,7 @@ export async function POST(req: Request, title: string, tempChatId: number) {
             "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format applealingly.",
         messages: convertToModelMessages(messages),
         tools: { search_web },
+       
     });
 
     const insertChatTransaction = db.transaction(
@@ -36,42 +37,50 @@ export async function POST(req: Request, title: string, tempChatId: number) {
             }
 
             // insert message into chat
-            console.log("insert chat message is going to run");
 
-            db.prepare(INSERT_CHAT_MESSAGE).run(tempChatId, message);
-            console.log("insert chat message ran");
+            db.prepare(INSERT_CHAT_MESSAGE).run(tempChatId, message, "user");
         }
     );
 
     try {
-        console.log("setting a new title inside the try block");
+        const lastMessage = messages[messages.length - 1];
 
-        const lastUserMessage = messages[messages.length - 1];
-        const userQuestion = lastUserMessage.content;
-        console.log(userQuestion);
-        const chatTitle = messages[0]?.content || "New Chat";
-        insertChatTransaction(tempChatId, chatTitle, "userQuestion");
-        console.log("completed the insert chat transaction");
+        if (lastMessage.role !== "user") return;
 
+        const userQuestion =
+            lastMessage.parts
+                ?.filter(p => p.type === "text")
+                .map(p => p.text)
+                .join("");
+
+        console.log("userQuestion:", userQuestion);
+
+        const chatTitle =
+            messages[0]?.parts
+                ?.filter(p => p.type === "text")
+                .map(p => p.text)
+                .join("") || "New Chat";
+
+        insertChatTransaction(tempChatId, chatTitle, userQuestion);
+
+    } catch (err) {
+        console.error(err);
     }
-    catch (error) {
-        console.log("error", error);
-    }
+
 
     return result.toUIMessageStreamResponse();
 }
 
 export async function GET(
-    
+
 ) {
     try {
-        
-        const allChats =  db
+        const allChats = db
             .prepare(GET_ALL_CHATS)
             .all()
 
         return NextResponse.json(
-                    allChats
+            allChats
 
         );
     } catch (error) {
