@@ -21,7 +21,7 @@ export async function POST(req: Request, title: string, tempChatId: number) {
             "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format applealingly.",
         messages: convertToModelMessages(messages),
         tools: { search_web },
-       
+
     });
 
     const insertChatTransaction = db.transaction(
@@ -44,16 +44,7 @@ export async function POST(req: Request, title: string, tempChatId: number) {
 
     try {
         const lastMessage = messages[messages.length - 1];
-
-        if (lastMessage.role !== "user") return;
-
-        const userQuestion =
-            lastMessage.parts
-                ?.filter(p => p.type === "text")
-                .map(p => p.text)
-                .join("");
-
-        console.log("userQuestion:", userQuestion);
+        if (!lastMessage) return;
 
         const chatTitle =
             messages[0]?.parts
@@ -61,19 +52,38 @@ export async function POST(req: Request, title: string, tempChatId: number) {
                 .map(p => p.text)
                 .join("") || "New Chat";
 
-        insertChatTransaction(tempChatId, chatTitle, userQuestion);
+        if (lastMessage.role === "user") {
+            const userQuestion =
+                lastMessage.parts
+                    ?.filter(p => p.type === "text")
+                    .map(p => p.text)
+                    .join("");
+
+            console.log("userQuestion:", userQuestion);
+
+            insertChatTransaction(tempChatId, chatTitle, userQuestion);
+        }
+        
+        if (lastMessage.role === "assistant") {
+            const aiAnswer =
+                lastMessage.parts
+                    ?.filter(p => p.type === "text")
+                    .map(p => p.text)
+                    .join("");
+
+            console.log("aiAnswer:", aiAnswer);
+
+            insertChatTransaction(tempChatId, chatTitle, aiAnswer);
+        }
 
     } catch (err) {
         console.error(err);
     }
 
-
     return result.toUIMessageStreamResponse();
 }
 
-export async function GET(
-
-) {
+export async function GET() {
     try {
         const allChats = db
             .prepare(GET_ALL_CHATS)
