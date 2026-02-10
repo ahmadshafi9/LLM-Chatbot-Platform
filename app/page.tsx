@@ -1,78 +1,100 @@
 "use client";
 
 import "./styles.css";
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useState, useEffect, useRef, useCallback } from "react";
 
-// fetch the role, message parts and everything
-
-async function getChatMessages(id: string) {
-  const res = await fetch(`/api/chat/${id}/messages`,{
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    role: "user"
-  })
-});
-  return res.json();
-  
+interface ApiMessage {
+  messageId: number;
+  chatId: number;
+  message: string;
+  role: string;
+  created_at: string;
 }
 
-async function fetchAllChats() {
-  const chats = await fetch('/api/chat').then(res => res.json())
-  return chats;
+function mapApiMessagesToUIMessages(apiMessages: ApiMessage[]) {
+  return apiMessages.map((m) => ({
+    id: String(m.messageId),
+    role: m.role as "user" | "assistant" | "system",
+    parts: [{ type: "text" as const, text: m.message }],
+  }));
+}
+
+async function getChatMessages(id: string): Promise<ApiMessage[]> {
+  const res = await fetch(`/api/chat/${id}/messages`, { method: "GET" });
+  if (!res.ok) throw new Error("Failed to load messages");
+  return res.json();
+}
+
+async function fetchAllChats(): Promise<{ chatId: number; title: string }[]> {
+  const res = await fetch("/api/chat");
+  if (!res.ok) throw new Error("Failed to load chats");
+  return res.json();
 }
 
 export default function Page() {
-  const [activeChatId, setActiveChatId] = useState<string>();
-  const [allChats, setAllChats] = useState<{chatId: string, title: string}[]>([])
-
-
-  const [initialMessages, setInitialMessages] = useState([]);
-
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-    }),
-    messages: initialMessages,
-  });
-
-  // fetch messages when id changes
-  useEffect(() => {
-    if (!activeChatId) return;
-
-    setInitialMessages([]);
-
-    getChatMessages(activeChatId).then(data => {
-      setInitialMessages(data);
-    });
-  }, [activeChatId]);
-
-  const [input, setInput] = useState();
+  const [activeChatId, setActiveChatId] = useState<string | undefined>();
+  const [allChats, setAllChats] = useState<{ chatId: number; title: string }[]>([]);
+  const [input, setInput] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const hadNoActiveChatRef = useRef(false);
 
-  // detect manual scroll
+  const { messages, sendMessage, status, setMessages } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    messages: [],
+  });
+
+  // Load chat list on mount and when coming back from a new chat
+  const loadChats = useCallback(async () => {
+    try {
+      const chats = await fetchAllChats();
+      setAllChats(chats);
+    } catch (e) {
+      console.error("Failed to fetch chats", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]);
+
+  // When switching to a chat, load its messages; when no chat, clear messages
+  useEffect(() => {
+    if (!activeChatId) {
+      setMessages([]);
+      return;
+    }
+    setMessages([]);
+    getChatMessages(activeChatId)
+      .then((data) => setMessages(mapApiMessagesToUIMessages(data)))
+      .catch((e) => console.error("Failed to load messages", e));
+  }, [activeChatId, setMessages]);
+
+  // After sending first message in "new chat", refetch list and select newest
+  useEffect(() => {
+    if (!hadNoActiveChatRef.current || (status !== "ready" && status !== "streaming")) return;
+    hadNoActiveChatRef.current = false;
+    fetchAllChats().then((chats) => {
+      setAllChats(chats);
+      if (chats.length > 0) setActiveChatId(String(chats[0].chatId));
+    });
+  }, [status]);
+
   useEffect(() => {
     const el = chatRef.current;
     if (!el) return;
-
     const onScroll = () => {
       const threshold = 50;
-      const atBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-      setIsAtBottom(atBottom);
+      setIsAtBottom(
+        el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+      );
     };
-
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // auto-scroll on new messages
   useEffect(() => {
     if (isAtBottom) {
       chatRef.current?.scrollTo({
@@ -82,108 +104,138 @@ export default function Page() {
     }
   }, [messages, status, isAtBottom]);
 
-  useEffect(() => {
-    fetchAllChats().then(res => {
-      setAllChats(res)
-    })
-  }, [])
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || status !== "ready") return;
+    if (!activeChatId) hadNoActiveChatRef.current = true;
+    sendMessage(
+      { text },
+      {
+        body: {
+          chatId: activeChatId ? Number(activeChatId) : null,
+        },
+      }
+    );
+    setInput("");
+  };
 
-  console.log(initialMessages)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const text = input.trim();
+      if (!text || status !== "ready") return;
+      if (!activeChatId) hadNoActiveChatRef.current = true;
+      sendMessage(
+        { text },
+        { body: { chatId: activeChatId ? Number(activeChatId) : null } }
+      );
+      setInput("");
+    }
+  };
 
   return (
-    <div className='parent-container'>
-      <div className="history">
-        <ul>
-      {allChats?.map((chat) => (
-        <li key={chat.chatId}>
-          <button onClick={() => setActiveChatId(chat.chatId)}>
-            {chat.title} - {chat.chatId}
-            </button>
-          </li>
-      )) ?? null}
-    </ul>
-      </div>
+    <div className="parent-container">
+      <aside className="history">
+        <div className="history-header">
+          <h2>Chats</h2>
+          <button
+            type="button"
+            className="new-chat-btn"
+            onClick={() => setActiveChatId(undefined)}
+            title="New chat"
+          >
+            + New
+          </button>
+        </div>
+        <ul className="chat-list">
+          {allChats.map((chat) => (
+            <li key={chat.chatId}>
+              <button
+                type="button"
+                className={activeChatId === String(chat.chatId) ? "active" : ""}
+                onClick={() => setActiveChatId(String(chat.chatId))}
+              >
+                <span className="chat-title">{chat.title || "New Chat"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </aside>
 
-      <div className="rest">
+      <main className="rest">
         <div className="chat" ref={chatRef}>
-          {messages.map(message => (
+          {messages.length === 0 && status === "ready" && (
+            <div className="empty-state">
+              <p>Start a new chat or pick one from the sidebar.</p>
+            </div>
+          )}
+          {messages.map((message) => (
             <div
-              className={message.role === "user" ? "chatUser" : "chatAI"}
+              className={
+                message.role === "user" ? "chatUser" : "chatAI"
+              }
               key={message.id}
             >
-              {message.role === 'user' ? <>User: </> : <>AI: </>}
-              {message.parts.map((part, index) =>
-                part.type === 'text'
-                  ? <span key={index}>{part.text}</span>
-                  : null
-              )}
+              <span className="message-role">
+                {message.role === "user" ? "You" : "AI"}:
+              </span>
+              <span className="message-content">
+                {message.parts.map((part, index) =>
+                  part.type === "text" ? (
+                    <span key={index}>{part.text}</span>
+                  ) : null
+                )}
+              </span>
             </div>
           ))}
-
-          {status === 'submitted' && (
+          {status === "submitted" && (
             <div className="chatAI thinking">
-              <span>AI:</span>
-              <div className="spinner"></div>
-              <span className="thinking-text">thinking...</span>
+              <span className="message-role">AI:</span>
+              <div className="spinner" />
+              <span className="thinking-text">Thinking…</span>
             </div>
           )}
         </div>
 
         {!isAtBottom && (
           <button
+            type="button"
+            className="jump-to-bottom"
             onClick={() =>
               chatRef.current?.scrollTo({
                 top: chatRef.current.scrollHeight,
                 behavior: "smooth",
               })
             }
-            style={{
-              position: "fixed",
-              bottom: "80px",
-              right: "20px",
-            }}
           >
             Jump to latest ↓
           </button>
         )}
 
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            if (input.trim()) {
-              sendMessage({ text: input });
-              setInput('');
-            }
-          }}
-        >
+        <form onSubmit={handleSubmit} className="input-form">
           <textarea
             className="input"
             value={input}
             rows={1}
-            onChange={e => {
+            onChange={(e) => {
               setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = e.target.scrollHeight + "px";
+              const t = e.target;
+              t.style.height = "auto";
+              t.style.height = t.scrollHeight + "px";
             }}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (input.trim()) {
-                  sendMessage({ text: input });
-                  setInput('');
-                }
-              }
-            }}
-            disabled={status !== 'ready'}
-            placeholder="Message ahmadGPT..."
+            onKeyDown={handleKeyDown}
+            disabled={status !== "ready"}
+            placeholder="Message ahmadGPT…"
           />
           <div className="submit">
-            <button type="submit" disabled={status !== 'ready'}>
-              {status === 'submitted' && <div className="submit-spinner"></div>}
+            <button type="submit" disabled={status !== "ready"}>
+              {status === "submitted" && <div className="submit-spinner" />}
+              <span className="submit-label">Send</span>
             </button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

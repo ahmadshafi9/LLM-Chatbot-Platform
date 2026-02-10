@@ -2,6 +2,15 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+## Environment variables
+
+Copy `.env.example` to `.env.local` and add your keys:
+
+- **OPENROUTER_API_KEY** – required for the chat API ([OpenRouter](https://openrouter.ai/))
+- **BRAVE_API_KEY** – required for web search ([Brave Search API](https://brave.com/search/api/))
+
+## Getting Started
+
 First, run the development server:
 
 ```bash

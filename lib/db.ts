@@ -1,14 +1,16 @@
-import { GET_ALL_CHATS } from "../constants/queries.ts";
 import Database from "better-sqlite3";
 import path from "path";
 
-const dbPath = path.join(process.cwd(), "chats.sqlite"); 
+const dbPath = path.join(process.cwd(), "chats.sqlite");
 
-export const db = new Database(dbPath);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-export function get_all_chats(db) {
-  return db.prepare(GET_ALL_CHATS).all();
+function createDb() {
+  const database = new Database(dbPath);
+  database.pragma("journal_mode = WAL");
+  database.pragma("foreign_keys = ON");
+  return database;
 }
+
+// Singleton for serverless: reuse one connection per process
+const globalForDb = globalThis as unknown as { db: Database.Database | undefined };
+export const db = globalForDb.db ?? createDb();
+if (process.env.NODE_ENV !== "production") globalForDb.db = db;

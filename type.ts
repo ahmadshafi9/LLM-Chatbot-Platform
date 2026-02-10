@@ -1,13 +1,12 @@
-//
-// src/type.ts (Server Component)
-//
-
-export interface chat {
+export interface Chat {
   chatId: number;
   title: string;
 }
 
-export interface chatMessages {
-    chatMessages: string;
-    chatId2: number;
+export interface ChatMessage {
+  messageId: number;
+  chatId: number;
+  message: string;
+  role: "user" | "assistant" | "system";
+  created_at: string;
 }
