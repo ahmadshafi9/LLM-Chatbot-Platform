@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local sqlite runtime files
+chats.sqlite-shm
+chats.sqlite-wal

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const result = streamText({
-    model: openrouter.chat("bytedance-seed/seed-1.6-flash"),
+    model: openrouter.chat("@preset/free-cli"),
     system:
       "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. When you need up-to-date or real-world information, use the search_web tool and then answer using the results.",
     messages: convertToModelMessages(messages),

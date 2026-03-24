@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.3",
+    "@langchain/community": "^1.1.17",
+    "@langchain/core": "^1.1.27",
+    "@langchain/textsplitters": "^1.0.1",
     "@openrouter/ai-sdk-provider": "^1.5.4",
     "@openrouter/sdk": "^0.3.11",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -38,6 +41,7 @@
     "nanoid": "^5.1.6",
     "next": "16.1.1",
     "ngx-spinner": "^19.0.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "shiki": "^3.20.0",

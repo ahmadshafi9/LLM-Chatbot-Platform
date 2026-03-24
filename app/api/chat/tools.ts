@@ -65,3 +65,17 @@ export const search_web = tool({
     }
   },
 });
+
+export const lookup_course_materials = tool({
+  description: 
+  "search the given files that were given by the user for his courses or etc.",
+  inputSchema: z.object({
+    course_search_terms: z
+    .string()
+    .describe("the search terms for the query thats going to look into the vector db. ex: 'midterm date', 'LU factorization"),
+    execute: async ({ course_search_terms }: {course_search_terms: string}) => {
+      const results = await searchCourseMaterials(course_search_terms);
+    return JSON.stringify({ query: course_search_terms, chunks: results });
+    }
+  })
+})
