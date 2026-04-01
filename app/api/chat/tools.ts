@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { searchCourseMaterials } from "@/lib/ai/course-search";
+
 const BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search";
 
 export const search_web = tool({
@@ -67,15 +69,27 @@ export const search_web = tool({
 });
 
 export const lookup_course_materials = tool({
-  description: 
-  "search the given files that were given by the user for his courses or etc.",
+  description:
+    "Search course materials (PDFs and indexed class content). Use when the user asks about lectures, homework, topics covered in their course PDFs, or anything answerable from their uploaded course documents—not for general web trivia.",
   inputSchema: z.object({
     course_search_terms: z
-    .string()
-    .describe("the search terms for the query thats going to look into the vector db. ex: 'midterm date', 'LU factorization"),
-    execute: async ({ course_search_terms }: {course_search_terms: string}) => {
-      const results = await searchCourseMaterials(course_search_terms);
-    return JSON.stringify({ query: course_search_terms, chunks: results });
+      .string()
+      .describe(
+        "Search query for the vector DB (e.g. 'midterm date', 'LU factorization')."
+      ),
+  }),
+  execute: async ({ course_search_terms }) => {
+    try {
+      const results = await searchCourseMaterials(course_search_terms, 5);
+      return JSON.stringify({ query: course_search_terms, chunks: results });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Course search failed.";
+      return JSON.stringify({
+        error: message,
+        query: course_search_terms,
+        chunks: [],
+      });
     }
-  })
-})
+  },
+});

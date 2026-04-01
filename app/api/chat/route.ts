@@ -2,7 +2,7 @@ import { convertToModelMessages, streamText, stepCountIs, UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { NextResponse } from "next/server";
 
-import { search_web } from "./tools";
+import { lookup_course_materials, search_web } from "./tools";
 import { db } from "../../../lib/db";
 import {
   GET_ALL_CHATS,
@@ -38,9 +38,9 @@ export async function POST(req: Request) {
   const result = streamText({
     model: openrouter.chat("@preset/free-cli"),
     system:
-      "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. When you need up-to-date or real-world information, use the search_web tool and then answer using the results.",
+      "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. For questions about the user's course—lectures, slides, assignments, or topics in their uploaded class materials—use the lookup_course_materials tool first, then answer from the returned chunks. For current events, general web facts, or news, use the search_web tool and then answer using the results. If both could apply, prefer course materials when the question is clearly about their class.",
     messages: convertToModelMessages(messages),
-    tools: { search_web },
+    tools: { search_web, lookup_course_materials },
     stopWhen: stepCountIs(5),
   });
 

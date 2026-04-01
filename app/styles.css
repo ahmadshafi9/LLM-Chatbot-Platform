@@ -147,6 +147,94 @@
 .message-content {
   word-break: break-word;
   white-space: pre-wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-activity {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--muted-fg, #6b7280);
+  padding: 6px 0 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.tool-activity:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.reasoning-block {
+  padding: 4px 0 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 0.88rem;
+}
+
+.reasoning-block:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.reasoning-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--muted-fg, #6b7280);
+  border-radius: 8px;
+}
+
+.reasoning-trigger:hover {
+  color: var(--ai-fg, #111);
+}
+
+.reasoning-chevron {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  opacity: 0.85;
+  width: 1em;
+}
+
+.reasoning-label {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.reasoning-streaming-dot {
+  font-style: italic;
+  animation: reasoning-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes reasoning-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.reasoning-text-wrap {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  margin-top: 4px;
+  padding-left: calc(1em + 6px);
+}
+
+.reasoning-text {
+  color: var(--muted-fg, #6b7280);
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .thinking {

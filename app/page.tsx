@@ -2,8 +2,20 @@
 
 import "./styles.css";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  DefaultChatTransport,
+  getToolOrDynamicToolName,
+  isReasoningUIPart,
+  isToolOrDynamicToolUIPart,
+} from "ai";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import type { UIMessage } from "ai";
 
 interface ApiMessage {
   messageId: number;
@@ -31,6 +43,84 @@ async function fetchAllChats(): Promise<{ chatId: number; title: string }[]> {
   const res = await fetch("/api/chat");
   if (!res.ok) throw new Error("Failed to load chats");
   return res.json();
+}
+
+function toolActivityLabel(part: UIMessage["parts"][number]): string | null {
+  if (!isToolOrDynamicToolUIPart(part)) return null;
+  const name = getToolOrDynamicToolName(part);
+  switch (name) {
+    case "lookup_course_materials":
+      if (part.state === "output-available") return "Read course materials";
+      if (part.state === "output-error") return "Course materials lookup failed";
+      return "Looking up course materials…";
+    case "search_web":
+      if (part.state === "output-available") return "Searched the web";
+      if (part.state === "output-error") return "Web search failed";
+      return "Searching the web…";
+    default:
+      if (part.state === "output-available") return `Finished: ${name}`;
+      if (part.state === "output-error") return `Failed: ${name}`;
+      return `Running ${name}…`;
+  }
+}
+
+function hasInFlightToolOrReasoning(msg: UIMessage): boolean {
+  for (const p of msg.parts) {
+    if (isToolOrDynamicToolUIPart(p)) {
+      if (p.state === "input-streaming" || p.state === "input-available") {
+        return true;
+      }
+    }
+    if (isReasoningUIPart(p) && p.state === "streaming") return true;
+  }
+  return false;
+}
+
+function CollapsibleReasoningBlock({
+  text,
+  state,
+}: {
+  text: string;
+  state?: "streaming" | "done";
+}) {
+  const [open, setOpen] = useState(false);
+  const streaming = state === "streaming";
+  return (
+    <div className="reasoning-block">
+      <button
+        type="button"
+        className="reasoning-trigger"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="reasoning-chevron" aria-hidden>
+          {open ? "▼" : "▶"}
+        </span>
+        <span className="reasoning-label">Thinking</span>
+        {streaming && <span className="reasoning-streaming-dot">…</span>}
+      </button>
+      {open && (
+        <div className="reasoning-text-wrap">
+          <div className="reasoning-text">{text || (streaming ? "…" : "")}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function streamingStatusHint(last: UIMessage | undefined): string {
+  if (!last || last.role !== "assistant") return "Thinking…";
+  if (last.parts.length === 0) return "Thinking…";
+  for (let i = last.parts.length - 1; i >= 0; i--) {
+    const p = last.parts[i];
+    if (isToolOrDynamicToolUIPart(p)) {
+      if (p.state === "input-streaming" || p.state === "input-available") {
+        return toolActivityLabel(p) ?? "Thinking…";
+      }
+    }
+    if (isReasoningUIPart(p) && p.state === "streaming") return "Thinking…";
+  }
+  return "Writing…";
 }
 
 export default function Page() {
@@ -103,6 +193,33 @@ export default function Page() {
       });
     }
   }, [messages, status, isAtBottom]);
+
+  const { thinkingRowVisible, thinkingRowLabel } = useMemo(() => {
+    if (status !== "streaming" && status !== "submitted") {
+      return { thinkingRowVisible: false, thinkingRowLabel: "" };
+    }
+    const last = messages[messages.length - 1];
+    if (status === "submitted") {
+      return {
+        thinkingRowVisible: true,
+        thinkingRowLabel: streamingStatusHint(
+          last?.role === "assistant" ? last : undefined
+        ),
+      };
+    }
+    if (status === "streaming") {
+      if (!last || last.role === "user") {
+        return { thinkingRowVisible: true, thinkingRowLabel: "Thinking…" };
+      }
+      if (last.role === "assistant" && hasInFlightToolOrReasoning(last)) {
+        return {
+          thinkingRowVisible: true,
+          thinkingRowLabel: streamingStatusHint(last),
+        };
+      }
+    }
+    return { thinkingRowVisible: false, thinkingRowLabel: "" };
+  }, [messages, status]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,20 +297,42 @@ export default function Page() {
               <span className="message-role">
                 {message.role === "user" ? "You" : "AI"}:
               </span>
-              <span className="message-content">
-                {message.parts.map((part, index) =>
-                  part.type === "text" ? (
-                    <span key={index}>{part.text}</span>
-                  ) : null
-                )}
-              </span>
+              <div className="message-content">
+                {message.parts.map((part, index) => {
+                  if (part.type === "text") {
+                    return <span key={index}>{part.text}</span>;
+                  }
+                  if (isReasoningUIPart(part)) {
+                    return (
+                      <CollapsibleReasoningBlock
+                        key={index}
+                        text={part.text}
+                        state={part.state}
+                      />
+                    );
+                  }
+                  if (isToolOrDynamicToolUIPart(part)) {
+                    const line = toolActivityLabel(part);
+                    if (!line) return null;
+                    return (
+                      <div
+                        key={index}
+                        className={`tool-activity tool-state-${part.state}`}
+                      >
+                        {line}
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
             </div>
           ))}
-          {status === "submitted" && (
+          {thinkingRowVisible && (
             <div className="chatAI thinking">
               <span className="message-role">AI:</span>
               <div className="spinner" />
-              <span className="thinking-text">Thinking…</span>
+              <span className="thinking-text">{thinkingRowLabel}</span>
             </div>
           )}
         </div>
