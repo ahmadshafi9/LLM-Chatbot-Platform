@@ -2,7 +2,7 @@ import { convertToModelMessages, streamText, stepCountIs, UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { NextResponse } from "next/server";
 
-import { lookup_course_materials, search_web } from "./tools";
+import { createLookupTool, search_web } from "./tools";
 import { db } from "../../../lib/db";
 import {
   GET_ALL_CHATS,
@@ -17,7 +17,7 @@ const openrouter = createOpenRouter({
 });
 
 export async function POST(req: Request) {
-  let body: { messages: UIMessage[]; chatId?: number | null };
+  let body: { messages: UIMessage[]; chatId?: number | null; groupId?: string | null; groupName?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { messages, chatId: bodyChatId } = body;
+  const { messages, chatId: bodyChatId, groupId, groupName } = body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json(
       { error: "messages array is required and must not be empty" },
@@ -35,12 +35,16 @@ export async function POST(req: Request) {
     );
   }
 
+  const groupContext = groupName
+    ? `You are the ${groupName} AI assistant. `
+    : "";
+
   const result = streamText({
     model: openrouter.chat("@preset/free-cli"),
     system:
-      "You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. For questions about the user's course—lectures, slides, assignments, or topics in their uploaded class materials—use the lookup_course_materials tool first, then answer from the returned chunks. For current events, general web facts, or news, use the search_web tool and then answer using the results. If both could apply, prefer course materials when the question is clearly about their class.",
+      `${groupContext}You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. For questions about the user's course—lectures, slides, assignments, or topics in their uploaded class materials—use the lookup_course_materials tool first, then answer from the returned chunks. For current events, general web facts, or news, use the search_web tool and then answer using the results. If both could apply, prefer course materials when the question is clearly about their class.`,
     messages: convertToModelMessages(messages),
-    tools: { search_web, lookup_course_materials },
+    tools: { search_web, lookup_course_materials: createLookupTool(groupId ?? null) },
     stopWhen: stepCountIs(5),
   });
 

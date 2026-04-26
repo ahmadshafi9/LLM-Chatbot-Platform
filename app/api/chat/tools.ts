@@ -68,28 +68,41 @@ export const search_web = tool({
   },
 });
 
-export const lookup_course_materials = tool({
-  description:
-    "Search course materials (PDFs and indexed class content). Use when the user asks about lectures, homework, topics covered in their course PDFs, or anything answerable from their uploaded course documents—not for general web trivia.",
-  inputSchema: z.object({
-    course_search_terms: z
-      .string()
-      .describe(
-        "Search query for the vector DB (e.g. 'midterm date', 'LU factorization')."
-      ),
-  }),
-  execute: async ({ course_search_terms }) => {
-    try {
-      const results = await searchCourseMaterials(course_search_terms, 5);
-      return JSON.stringify({ query: course_search_terms, chunks: results });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Course search failed.";
-      return JSON.stringify({
-        error: message,
-        query: course_search_terms,
-        chunks: [],
-      });
-    }
-  },
-});
+/**
+ * Returns a lookup_course_materials tool scoped to the given group.
+ * Pass groupId=null to search across all groups (general mode).
+ */
+export function createLookupTool(groupId?: string | null) {
+  return tool({
+    description:
+      "Search course materials (PDFs and indexed class content). Use when the user asks about lectures, homework, topics covered in their course PDFs, or anything answerable from their uploaded course documents—not for general web trivia.",
+    inputSchema: z.object({
+      course_search_terms: z
+        .string()
+        .describe(
+          "Search query for the vector DB (e.g. 'midterm date', 'LU factorization')."
+        ),
+    }),
+    execute: async ({ course_search_terms }) => {
+      try {
+        const results = await searchCourseMaterials(
+          course_search_terms,
+          5,
+          groupId ?? null
+        );
+        return JSON.stringify({ query: course_search_terms, chunks: results });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Course search failed.";
+        return JSON.stringify({
+          error: message,
+          query: course_search_terms,
+          chunks: [],
+        });
+      }
+    },
+  });
+}
+
+// Convenience export: searches across all groups
+export const lookup_course_materials = createLookupTool(null);
