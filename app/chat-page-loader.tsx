@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 
 const ChatClient = dynamic(() => import("./chat-client"), {
   ssr: false,
@@ -22,5 +23,7 @@ const ChatClient = dynamic(() => import("./chat-client"), {
 });
 
 export default function ChatPageLoader() {
-  return <ChatClient />;
+  const params = useSearchParams();
+  const group = params.get("group") ?? undefined;
+  return <ChatClient initialGroupSlug={group} />;
 }

@@ -62,6 +62,7 @@ export async function processPdfBuffer(
     ingestJobId?: string;
     maxPages?: number;
     groupId?: string | null;
+    uploadedBy?: string | null;
   }
 ): Promise<ProcessPdfResult> {
   ensurePdfJsWorker();
@@ -92,15 +93,26 @@ export async function processPdfBuffer(
     [{ source: sourceLabel }]
   );
 
-  const chunkTexts = texts.map((d) => d.pageContent);
+  // Filter out empty/whitespace-only chunks — some embedding APIs skip them,
+  // which causes a vector count mismatch and crashes on vectors[idx].
+  const chunkTexts = texts
+    .map((d) => d.pageContent)
+    .filter((t) => t.trim().length > 0);
+
   const vectors: number[][] = [];
   for (let i = 0; i < chunkTexts.length; i += EMBED_TEXTS_PER_ROUND) {
     const slice = chunkTexts.slice(i, i + EMBED_TEXTS_PER_ROUND);
     const batchVecs = await embeddings.embedDocuments(slice);
+    if (batchVecs.length !== slice.length) {
+      throw new Error(
+        `Embedding count mismatch: sent ${slice.length} chunks, got ${batchVecs.length} vectors`
+      );
+    }
     vectors.push(...batchVecs);
   }
 
   const groupId = opts?.groupId ?? null;
+  const uploadedBy = opts?.uploadedBy ?? null;
   const supabase = getServiceSupabase();
   let inserted = 0;
   for (let i = 0; i < chunkTexts.length; i += INSERT_BATCH) {
@@ -118,6 +130,7 @@ export async function processPdfBuffer(
           ingest_job_id: ingestJobId,
         },
         group_id: groupId,
+        uploaded_by: uploadedBy,
       };
     });
     const { error } = await supabase.from("course_chunks").insert(slice);

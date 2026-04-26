@@ -72,7 +72,7 @@ export const search_web = tool({
  * Returns a lookup_course_materials tool scoped to the given group.
  * Pass groupId=null to search across all groups (general mode).
  */
-export function createLookupTool(groupId?: string | null) {
+export function createLookupTool(groupId?: string | null, uploadedBy?: string | null) {
   return tool({
     description:
       "Search course materials (PDFs and indexed class content). Use when the user asks about lectures, homework, topics covered in their course PDFs, or anything answerable from their uploaded course documents—not for general web trivia.",
@@ -88,7 +88,8 @@ export function createLookupTool(groupId?: string | null) {
         const results = await searchCourseMaterials(
           course_search_terms,
           5,
-          groupId ?? null
+          groupId ?? null,
+          uploadedBy ?? null
         );
         return JSON.stringify({ query: course_search_terms, chunks: results });
       } catch (err) {

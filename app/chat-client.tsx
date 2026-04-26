@@ -49,9 +49,49 @@ async function getChatMessages(id: string): Promise<ApiMessage[]> {
   return res.json();
 }
 
-async function fetchAllChats(): Promise<{ chatId: number; title: string }[]> {
-  const res = await fetch("/api/chat");
+function getOrCreateDeviceId(): string {
+  let id = localStorage.getItem("chatbot_device_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("chatbot_device_id", id);
+  }
+  return id;
+}
+
+async function fetchAllChats(ownerId: string): Promise<{ chatId: number; title: string; group_name?: string }[]> {
+  const res = await fetch(`/api/chat?owner=${encodeURIComponent(ownerId)}`);
   if (!res.ok) throw new Error("Failed to load chats");
+  return res.json();
+}
+
+async function migrateChats(from: string, to: string): Promise<void> {
+  await fetch("/api/chat/migrate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to }),
+  });
+}
+
+async function deleteChatById(chatId: number, ownerId: string): Promise<void> {
+  const res = await fetch(
+    `/api/chat/${chatId}?owner=${encodeURIComponent(ownerId)}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) throw new Error("Failed to delete chat");
+}
+
+interface DocListItem {
+  id: string;
+  source_label: string;
+  chunks_inserted: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+  low_text_warning: boolean | null;
+}
+
+async function fetchDocList(groupId: string): Promise<DocListItem[]> {
+  const res = await fetch(`/api/documents/list?group=${encodeURIComponent(groupId)}`);
+  if (!res.ok) return [];
   return res.json();
 }
 
@@ -150,9 +190,11 @@ function streamingStatusHint(last: UIMessage | undefined): string {
   return "Writing…";
 }
 
-export default function ChatClient() {
+export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: string }) {
   const [activeChatId, setActiveChatId] = useState<string | undefined>();
-  const [allChats, setAllChats] = useState<{ chatId: number; title: string }[]>([]);
+  const [allChats, setAllChats] = useState<{ chatId: number; title: string; group_name?: string }[]>([]);
+  const [deviceId] = useState<string>(() => getOrCreateDeviceId());
+  const ownerIdRef = useRef<string>("");
   const [input, setInput] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -176,21 +218,44 @@ export default function ChatClient() {
     try {
       supabase = getBrowserSupabase();
     } catch {
+      ownerIdRef.current = `device_${deviceId}`;
       setAuthChecked(true);
       return;
     }
+
     supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null);
+      const u = data.user ?? null;
+      ownerIdRef.current = u ? `user_${u.id}` : `device_${deviceId}`;
+      setUser(u);
       setAuthChecked(true);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) setShowAuthModal(false);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
 
-  const handleLinkedInSignIn = async () => {
+    const prevUserIdRef = { current: null as string | null };
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const newUser = session?.user ?? null;
+      const newOwnerId = newUser ? `user_${newUser.id}` : `device_${deviceId}`;
+      const wasAnonymous = prevUserIdRef.current === null;
+
+      if (newUser && wasAnonymous) {
+        // Just signed in from anonymous — migrate device chats then reload
+        const deviceOwnerId = `device_${deviceId}`;
+        migrateChats(deviceOwnerId, `user_${newUser.id}`)
+          .then(() => fetchAllChats(newOwnerId))
+          .then((chats) => setAllChats(chats))
+          .catch(() => {});
+      }
+
+      prevUserIdRef.current = newUser?.id ?? null;
+      ownerIdRef.current = newOwnerId;
+      setUser(newUser);
+      if (newUser) setShowAuthModal(false);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, [deviceId]);
+
+  const handleGoogleSignIn = async () => {
     setSigningIn(true);
     try {
       const supabase = getBrowserSupabase();
@@ -209,6 +274,10 @@ export default function ChatClient() {
   const [newGroupName, setNewGroupName] = useState("");
   const [groupCreateState, setGroupCreateState] = useState<"idle" | "loading" | "error">("idle");
   const [groupCreateError, setGroupCreateError] = useState<string | null>(null);
+
+  const [searchScope, setSearchScope] = useState<"all" | "mine">("all");
+  const [docs, setDocs] = useState<DocListItem[]>([]);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "error">(
@@ -230,8 +299,9 @@ export default function ChatClient() {
   });
 
   const loadChats = useCallback(async () => {
+    if (!ownerIdRef.current) return;
     try {
-      const chats = await fetchAllChats();
+      const chats = await fetchAllChats(ownerIdRef.current);
       setAllChats(chats);
     } catch (e) {
       console.error("Failed to fetch chats", e);
@@ -248,9 +318,41 @@ export default function ChatClient() {
   }, []);
 
   useEffect(() => {
-    loadChats();
+    if (authChecked) loadChats();
     loadGroups();
-  }, [loadChats, loadGroups]);
+  }, [authChecked, loadChats, loadGroups]);
+
+  // Load doc list when group changes
+  useEffect(() => {
+    if (selectedGroup) {
+      fetchDocList(selectedGroup.id).then(setDocs).catch(() => setDocs([]));
+    } else {
+      setDocs([]);
+    }
+    setDocsOpen(false);
+  }, [selectedGroup]);
+
+  // Auto-select group from URL param
+  useEffect(() => {
+    if (initialGroupSlug && groups.length > 0 && !selectedGroup) {
+      const match = groups.find((g) => g.slug === initialGroupSlug);
+      if (match) setSelectedGroup(match);
+    }
+  }, [groups, initialGroupSlug, selectedGroup]);
+
+  const handleDeleteChat = async (chatId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteChatById(chatId, ownerIdRef.current);
+      setAllChats((prev) => prev.filter((c) => c.chatId !== chatId));
+      if (activeChatId === String(chatId)) {
+        setActiveChatId(undefined);
+        setMessages([]);
+      }
+    } catch {
+      // silently ignore
+    }
+  };
 
   const handleCreateGroup = async () => {
     const name = newGroupName.trim();
@@ -283,7 +385,7 @@ export default function ChatClient() {
   useEffect(() => {
     if (!hadNoActiveChatRef.current || (status !== "ready" && status !== "streaming")) return;
     hadNoActiveChatRef.current = false;
-    fetchAllChats().then((chats) => {
+    fetchAllChats(ownerIdRef.current).then((chats) => {
       setAllChats(chats);
       if (chats.length > 0) setActiveChatId(String(chats[0].chatId));
     });
@@ -328,12 +430,8 @@ export default function ChatClient() {
       if (!last || last.role === "user") {
         return { thinkingRowVisible: true, thinkingRowLabel: "Thinking…" };
       }
-      if (last.role === "assistant" && hasInFlightToolOrReasoning(last)) {
-        return {
-          thinkingRowVisible: true,
-          thinkingRowLabel: streamingStatusHint(last),
-        };
-      }
+      // When last message is already an assistant bubble, it renders its own
+      // tool-activity label — don't add a second thinking row on top.
     }
     return { thinkingRowVisible: false, thinkingRowLabel: "" };
   }, [messages, status]);
@@ -357,6 +455,7 @@ export default function ChatClient() {
     const fd = new FormData();
     fd.set("file", f);
     if (selectedGroup) fd.set("groupId", selectedGroup.id);
+    if (ownerIdRef.current) fd.set("ownerId", ownerIdRef.current);
 
     try {
       const res = await fetch("/api/documents/upload", {
@@ -434,6 +533,10 @@ export default function ChatClient() {
 
         if (terminalStatuses.has(data.status)) {
           if (intervalId) clearInterval(intervalId);
+          // Refresh doc list after successful ingest
+          if (data.status === "done" && selectedGroup) {
+            fetchDocList(selectedGroup.id).then(setDocs).catch(() => {});
+          }
         }
       } catch {
         // keep polling; transient network errors are expected
@@ -453,6 +556,8 @@ export default function ChatClient() {
     chatId: activeChatId ? Number(activeChatId) : null,
     groupId: selectedGroup?.id ?? null,
     groupName: selectedGroup?.name ?? null,
+    ownerId: ownerIdRef.current,
+    searchScope: selectedGroup ? searchScope : "all",
   };
 
   const trySend = (text: string) => {
@@ -487,7 +592,9 @@ export default function ChatClient() {
     <div className="parent-container">
       <aside className="history">
         <div className="history-header">
-          <h2>Chats</h2>
+          <a href="/" className="back-home-btn" title="Back to groups">
+            ← Groups
+          </a>
           <button
             type="button"
             className="new-chat-btn"
@@ -498,54 +605,28 @@ export default function ChatClient() {
           </button>
         </div>
 
-        {/* Group / AI selector */}
-        <div className="group-panel">
-          <p className="group-panel-label">Select AI</p>
-          <div className="group-list">
-            <button
-              type="button"
-              className={`group-btn${selectedGroup === null ? " active" : ""}`}
-              onClick={() => setSelectedGroup(null)}
-            >
-              <span className="group-dot" />
-              General
-            </button>
-            {groups.map((g) => (
+
+        {selectedGroup && (
+          <div className="scope-toggle-panel">
+            <p className="scope-toggle-label">Search materials from</p>
+            <div className="scope-toggle-btns">
               <button
-                key={g.id}
                 type="button"
-                className={`group-btn${selectedGroup?.id === g.id ? " active" : ""}`}
-                onClick={() => setSelectedGroup(g)}
+                className={`scope-btn${searchScope === "all" ? " active" : ""}`}
+                onClick={() => setSearchScope("all")}
               >
-                <span className="group-dot" />
-                {g.name}
+                Everyone
               </button>
-            ))}
+              <button
+                type="button"
+                className={`scope-btn${searchScope === "mine" ? " active" : ""}`}
+                onClick={() => setSearchScope("mine")}
+              >
+                Mine only
+              </button>
+            </div>
           </div>
-          <div className="group-create-row">
-            <input
-              className="group-create-input"
-              placeholder="New group name…"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateGroup();
-              }}
-              disabled={groupCreateState === "loading"}
-            />
-            <button
-              type="button"
-              className="group-create-btn"
-              onClick={handleCreateGroup}
-              disabled={!newGroupName.trim() || groupCreateState === "loading"}
-            >
-              {groupCreateState === "loading" ? "…" : "+"}
-            </button>
-          </div>
-          {groupCreateState === "error" && groupCreateError && (
-            <p className="group-error">{groupCreateError}</p>
-          )}
-        </div>
+        )}
 
         <div className="doc-upload-panel">
           <input
@@ -604,17 +685,61 @@ export default function ChatClient() {
         </div>
         <ul className="chat-list">
           {allChats.map((chat) => (
-            <li key={chat.chatId}>
+            <li key={chat.chatId} className="chat-list-item">
               <button
                 type="button"
                 className={activeChatId === String(chat.chatId) ? "active" : ""}
-                onClick={() => setActiveChatId(String(chat.chatId))}
+                onClick={() => {
+                  setActiveChatId(String(chat.chatId));
+                  if (chat.group_name) {
+                    const match = groups.find((g) => g.name === chat.group_name);
+                    setSelectedGroup(match ?? null);
+                  } else {
+                    setSelectedGroup(null);
+                  }
+                }}
               >
                 <span className="chat-title">{chat.title || "New Chat"}</span>
+                {chat.group_name && (
+                  <span className="chat-group-tag">{chat.group_name}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="chat-delete-btn"
+                onClick={(e) => handleDeleteChat(chat.chatId, e)}
+                title="Delete chat"
+              >
+                ×
               </button>
             </li>
           ))}
         </ul>
+
+        {selectedGroup && docs.length > 0 && (
+          <div className="doc-list-panel">
+            <button
+              type="button"
+              className="doc-list-toggle"
+              onClick={() => setDocsOpen((v) => !v)}
+            >
+              <span>Indexed PDFs ({docs.length})</span>
+              <span>{docsOpen ? "▲" : "▼"}</span>
+            </button>
+            {docsOpen && (
+              <ul className="doc-list">
+                {docs.map((doc) => (
+                  <li key={doc.id} className="doc-list-item" title={doc.source_label}>
+                    <span className="doc-list-name">{doc.source_label}</span>
+                    <span className="doc-list-chunks">
+                      {doc.chunks_inserted ?? 0} chunks
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </aside>
 
       <main className="rest">
@@ -638,7 +763,14 @@ export default function ChatClient() {
               </p>
             </div>
           )}
-          {messages.map((message) => (
+          {messages.filter((msg, idx) => {
+            if (msg.role === "user") return true;
+            if (idx === messages.length - 1) return true;
+            // Hide intermediate AI messages that are only tool calls (no text)
+            return msg.parts.some(
+              (p) => p.type === "text" && (p as { text: string }).text.trim().length > 0
+            );
+          }).map((message) => (
             <div
               className={
                 message.role === "user" ? "chatUser" : "chatAI"
@@ -752,7 +884,7 @@ export default function ChatClient() {
             <button
               type="button"
               className="auth-oauth-btn auth-modal-google"
-              onClick={handleLinkedInSignIn}
+              onClick={handleGoogleSignIn}
               disabled={signingIn}
             >
               <LinkedInIcon />

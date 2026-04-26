@@ -14,3 +14,8 @@ function createDb() {
 const globalForDb = globalThis as unknown as { db: Database.Database | undefined };
 export const db = globalForDb.db ?? createDb();
 if (process.env.NODE_ENV !== "production") globalForDb.db = db;
+
+// Migrations
+try { db.exec(`ALTER TABLE chats ADD COLUMN group_name TEXT`); } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE chats ADD COLUMN owner_id TEXT`); } catch { /* already exists */ }
+db.exec(`CREATE INDEX IF NOT EXISTS chats_owner_id_idx ON chats (owner_id)`);

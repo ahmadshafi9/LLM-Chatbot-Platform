@@ -3,12 +3,29 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { NextResponse } from "next/server";
 
 import { createLookupTool, search_web } from "./tools";
-import { db } from "../../../lib/db";
 import {
-  GET_ALL_CHATS,
-  INSERT_CHAT,
-  INSERT_CHAT_MESSAGE,
-} from "@/constants/queries";
+  getAllChats,
+  insertChat,
+  insertChatMessage,
+} from "@/lib/supabase/chats";
+import { getServiceSupabase } from "@/lib/supabase/server";
+
+async function getIndexedDocNames(groupId: string | null | undefined): Promise<string[]> {
+  if (!groupId) return [];
+  try {
+    const supabase = getServiceSupabase();
+    const { data } = await supabase
+      .from("ingest_jobs")
+      .select("source_label")
+      .eq("status", "done")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    return (data ?? []).map((r: { source_label: string }) => r.source_label);
+  } catch {
+    return [];
+  }
+}
 
 export const maxDuration = 30;
 
@@ -16,18 +33,24 @@ const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY!,
 });
 
+const ANONYMOUS_OWNER = "anonymous";
+
 export async function POST(req: Request) {
-  let body: { messages: UIMessage[]; chatId?: number | null; groupId?: string | null; groupName?: string | null };
+  let body: {
+    messages: UIMessage[];
+    chatId?: number | null;
+    groupId?: string | null;
+    groupName?: string | null;
+    ownerId?: string | null;
+    searchScope?: "all" | "mine";
+  };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { messages, chatId: bodyChatId, groupId, groupName } = body;
+  const { messages, chatId: bodyChatId, groupId, groupName, ownerId, searchScope } = body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json(
       { error: "messages array is required and must not be empty" },
@@ -35,48 +58,22 @@ export async function POST(req: Request) {
     );
   }
 
-  const groupContext = groupName
-    ? `You are the ${groupName} AI assistant. `
-    : "";
+  const resolvedOwner = ownerId?.trim() || ANONYMOUS_OWNER;
+  const uploadedBy = searchScope === "mine" && ownerId ? ownerId : null;
 
-  const result = streamText({
-    model: openrouter.chat("@preset/free-cli"),
-    system:
-      `${groupContext}You are a helpful assistant that gives clear and concise answers in English and no hashes or hashtags just new line if needed and format appealingly. For questions about the user's course—lectures, slides, assignments, or topics in their uploaded class materials—use the lookup_course_materials tool first, then answer from the returned chunks. For current events, general web facts, or news, use the search_web tool and then answer using the results. If both could apply, prefer course materials when the question is clearly about their class.`,
-    messages: convertToModelMessages(messages),
-    tools: { search_web, lookup_course_materials: createLookupTool(groupId ?? null) },
-    stopWhen: stepCountIs(5),
-  });
-
-  const insertMessage = db.transaction(
-    (
-      chatId: number | undefined,
-      title: string,
-      message: string,
-      role: "user" | "assistant"
-    ) => {
-      let resolvedChatId = chatId;
-      if (resolvedChatId === undefined || resolvedChatId === null) {
-        const insertResult = db.prepare(INSERT_CHAT).run(title);
-        resolvedChatId = Number(insertResult.lastInsertRowid);
-      }
-      db.prepare(INSERT_CHAT_MESSAGE).run(resolvedChatId, message, role);
-      return resolvedChatId;
-    }
-  );
-
-  const lastMessage = messages[messages.length - 1];
   const chatTitle =
     messages[0]?.parts
       ?.filter((p) => p.type === "text")
       .map((p) => (p as { text: string }).text)
       .join("") || "New Chat";
 
+  // Insert user message into Supabase before streaming
   let currentChatId: number | undefined =
     typeof bodyChatId === "number" && Number.isInteger(bodyChatId)
       ? bodyChatId
       : undefined;
 
+  const lastMessage = messages[messages.length - 1];
   if (lastMessage?.role === "user") {
     const userText =
       lastMessage.parts
@@ -84,29 +81,38 @@ export async function POST(req: Request) {
         .map((p) => (p as { text: string }).text)
         .join("") ?? "";
     if (userText.trim()) {
-      currentChatId = insertMessage(
-        currentChatId,
-        chatTitle,
-        userText.trim(),
-        "user"
-      );
+      try {
+        if (!currentChatId) {
+          currentChatId = await insertChat(chatTitle, groupName ?? null, resolvedOwner);
+        }
+        await insertChatMessage(currentChatId, userText.trim(), "user");
+      } catch (err) {
+        console.error("Failed to persist user message:", err);
+      }
     }
   }
 
-  // When stream completes, persist the assistant message
+  const docNames = await getIndexedDocNames(groupId);
+  const docListLine = docNames.length > 0
+    ? `The following documents have been indexed for this course:\n${docNames.map((n) => `- ${n}`).join("\n")}\n`
+    : "No documents have been indexed for this course yet.\n";
+
+  const result = streamText({
+    model: openrouter.chat("@preset/free-cli"),
+    system: `You are a helpful assistant${groupName ? ` for the ${groupName} course` : ""}. Reply in plain English only — no markdown hashes, no XML tags, no JSON blocks, no structured formats of any kind. Use plain sentences and new lines for formatting. If you need to ask the user a question, just ask it naturally in plain text. Never invent, guess, or hallucinate document names or topics — only report what you actually find in tool results.
+
+${groupName ? `${docListLine}\nAlways call lookup_course_materials first for every question to check the uploaded ${groupName} course materials. If the results are relevant, answer from them. If the results are empty or not relevant, tell the user briefly that you could not find this in the course materials, then call search_web and answer from those results.` : `For questions about course content or uploaded materials, use lookup_course_materials first. For general knowledge, current events, or web facts, use search_web. If both could apply, try course materials first.`}`,
+    messages: convertToModelMessages(messages),
+    tools: { search_web, lookup_course_materials: createLookupTool(groupId ?? null, uploadedBy) },
+    stopWhen: stepCountIs(5),
+  });
+
+  // After stream completes, persist assistant message
   const chatIdForAssistant = currentChatId;
   result.text
-    .then((assistantText) => {
+    .then(async (assistantText) => {
       if (assistantText.trim() && chatIdForAssistant != null) {
-        try {
-          db.prepare(INSERT_CHAT_MESSAGE).run(
-            chatIdForAssistant,
-            assistantText.trim(),
-            "assistant"
-          );
-        } catch (err) {
-          console.error("Failed to persist assistant message:", err);
-        }
+        await insertChatMessage(chatIdForAssistant, assistantText.trim(), "assistant");
       }
     })
     .catch(() => {});
@@ -118,18 +124,15 @@ export async function POST(req: Request) {
   return response;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const allChats = db.prepare(GET_ALL_CHATS).all();
-    return NextResponse.json(allChats);
+    const owner =
+      new URL(req.url).searchParams.get("owner") || ANONYMOUS_OWNER;
+    const chats = await getAllChats(owner);
+    return NextResponse.json(chats);
   } catch (error) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Internal Server Error",
-      },
+      { error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 }
     );
   }

@@ -51,6 +51,7 @@ export async function POST(req: Request) {
   const sourceLabel = file.name;
   const filename = file.name;
   const groupId = (form.get("groupId") as string | null)?.trim() || null;
+  const uploadedBy = (form.get("ownerId") as string | null)?.trim() || null;
 
   const supabase = getServiceSupabase();
 
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
     // Brand new job.
     const { data: inserted, error: insertErr } = await supabase
       .from("ingest_jobs")
-      .insert({ ingest_hash: ingestHash, status: "queued", source_label: sourceLabel, filename, group_id: groupId })
+      .insert({ ingest_hash: ingestHash, status: "queued", source_label: sourceLabel, filename, group_id: groupId, uploaded_by: uploadedBy })
       .select("id")
       .single();
     if (insertErr) {
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
 
   const child = spawn(
     tsxBin,
-    [scriptPath, tmpPath, jobId, sourceLabel, ingestHash, groupId ?? ""],
+    [scriptPath, tmpPath, jobId, sourceLabel, ingestHash, groupId ?? "", uploadedBy ?? ""],
     {
       cwd,
       // Inherit Next.js process.env so the child gets Supabase keys, etc.

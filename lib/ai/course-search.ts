@@ -15,7 +15,8 @@ export type CourseChunkResult = {
 export async function searchCourseMaterials(
   query: string,
   topK = 5,
-  groupId?: string | null
+  groupId?: string | null,
+  uploadedBy?: string | null
 ): Promise<CourseChunkResult[]> {
   const supabase = getServiceSupabase();
   const vector = await queryEmbeddings.embedQuery(query.trim());
@@ -26,6 +27,7 @@ export async function searchCourseMaterials(
     query_embedding,
     match_count: topK,
     p_group_id: groupId ?? null,
+    p_uploaded_by: uploadedBy ?? null,
   });
   if (error) throw error;
   const rows = data ?? [];

@@ -5,16 +5,17 @@ import { getServiceSupabase } from "../lib/supabase/server";
 
 const MAX_PAGES_PUBLIC = 100;
 
-const [filePath, jobId, sourceLabel, ingestHash, rawGroupId] = process.argv.slice(2);
+const [filePath, jobId, sourceLabel, ingestHash, rawGroupId, rawUploadedBy] = process.argv.slice(2);
 
 if (!filePath || !jobId || !sourceLabel || !ingestHash) {
   console.error(
-    "Usage: node --env-file=.env.local --import tsx scripts/ingest-job.ts <filePath> <jobId> <sourceLabel> <ingestHash> [groupId]"
+    "Usage: node --env-file=.env.local --import tsx scripts/ingest-job.ts <filePath> <jobId> <sourceLabel> <ingestHash> [groupId] [uploadedBy]"
   );
   process.exit(1);
 }
 
 const groupId: string | null = rawGroupId?.trim() || null;
+const uploadedBy: string | null = rawUploadedBy?.trim() || null;
 
 const supabase = getServiceSupabase();
 
@@ -64,6 +65,7 @@ try {
     ingestJobId: jobId,
     maxPages: MAX_PAGES_PUBLIC,
     groupId,
+    uploadedBy,
   });
 
   await supabase
