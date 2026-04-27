@@ -128,9 +128,9 @@ function toolActivityLabel(part: UIMessage["parts"][number]): string | null {
       if (part.state === "output-error") return "Web search failed";
       return "Searching the web…";
     default:
-      if (part.state === "output-available") return `Finished: ${name}`;
-      if (part.state === "output-error") return `Failed: ${name}`;
-      return `Running ${name}…`;
+      if (part.state === "output-available") return "Done";
+      if (part.state === "output-error") return "Something went wrong";
+      return "Working on it…";
   }
 }
 
@@ -808,33 +808,40 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
                 {message.role === "user" ? "You" : "AI"}:
               </span>
               <div className="message-content">
-                {message.parts.map((part: any, index: number) => {
-                  if (part.type === "text") {
-                    return <span key={index}>{part.text}</span>;
-                  }
-                  if (isReasoningUIPart(part)) {
-                    return (
-                      <CollapsibleReasoningBlock
-                        key={index}
-                        text={part.text}
-                        state={part.state}
-                      />
-                    );
-                  }
-                  if (isToolOrDynamicToolUIPart(part)) {
-                    const line = toolActivityLabel(part);
-                    if (!line) return null;
-                    return (
-                      <div
-                        key={index}
-                        className={`tool-activity tool-state-${part.state}`}
-                      >
-                        {line}
-                      </div>
-                    );
-                  }
-                  return null;
-                })}
+                {(() => {
+                  const reasoningParts = message.parts.filter((p: any) => isReasoningUIPart(p));
+                  const mergedReasoning = reasoningParts.map((p: any) => p.text).join("\n\n");
+                  const mergedState = reasoningParts.some((p: any) => p.state === "streaming") ? "streaming" : "done";
+                  const nonReasoningParts = message.parts.filter((p: any) => !isReasoningUIPart(p));
+                  return (
+                    <>
+                      {mergedReasoning && (
+                        <CollapsibleReasoningBlock
+                          text={mergedReasoning}
+                          state={mergedState}
+                        />
+                      )}
+                      {nonReasoningParts.map((part: any, index: number) => {
+                        if (part.type === "text") {
+                          return <span key={index}>{part.text}</span>;
+                        }
+                        if (isToolOrDynamicToolUIPart(part)) {
+                          const line = toolActivityLabel(part);
+                          if (!line) return null;
+                          return (
+                            <div
+                              key={index}
+                              className={`tool-activity tool-state-${part.state}`}
+                            >
+                              {line}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ))}
