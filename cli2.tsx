@@ -5,10 +5,10 @@ import { DefaultChatTransport } from 'ai';
 import { useState } from 'react';
 
 export default function Page() {
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status } = useChat<any>({
     transport: new DefaultChatTransport({
       api: '/api/chat',
-    }),
+    }) as any,
   });
   const [input, setInput] = useState('');
 
@@ -17,7 +17,7 @@ export default function Page() {
       {messages.map(message => (
         <div key={message.id}>
           {message.role === 'user' ? 'User: ' : 'AI: '}
-          {message.parts.map((part, index) =>
+          {message.parts.map((part: any, index: number) =>
             part.type === 'text' ? <span key={index}>{part.text}</span> : null,
           )}
         </div>

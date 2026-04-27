@@ -296,8 +296,9 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
     errorText?: string;
   } | null>(null);
 
-  const { messages, sendMessage, status, setMessages } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+  const { messages, sendMessage, status, setMessages } = useChat<any>({
+    // NOTE: cast is required due ai package type duplication in build env.
+    transport: new DefaultChatTransport({ api: "/api/chat" }) as any,
     messages: [],
   });
 
@@ -766,14 +767,14 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
               </p>
             </div>
           )}
-          {messages.filter((msg, idx) => {
+          {messages.filter((msg: any, idx: number) => {
             if (msg.role === "user") return true;
             if (idx === messages.length - 1) return true;
             // Hide intermediate AI messages that are only tool calls (no text)
             return msg.parts.some(
-              (p) => p.type === "text" && (p as { text: string }).text.trim().length > 0
+              (p: any) => p.type === "text" && (p as { text: string }).text.trim().length > 0
             );
-          }).map((message) => (
+          }).map((message: any) => (
             <div
               className={
                 message.role === "user" ? "chatUser" : "chatAI"
@@ -784,7 +785,7 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
                 {message.role === "user" ? "You" : "AI"}:
               </span>
               <div className="message-content">
-                {message.parts.map((part, index) => {
+                {message.parts.map((part: any, index: number) => {
                   if (part.type === "text") {
                     return <span key={index}>{part.text}</span>;
                   }

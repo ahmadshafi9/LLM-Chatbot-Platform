@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       // Inherit Next.js process.env so the child gets Supabase keys, etc.
       // without needing --env-file (which depends on cwd being correct).
       env: {
-        PATH: process.env.PATH,
+        ...process.env,
         SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
         VOYAGEAI_API_KEY: process.env.VOYAGEAI_API_KEY,

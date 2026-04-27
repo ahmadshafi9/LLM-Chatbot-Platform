@@ -75,7 +75,7 @@ export async function processPdfBuffer(
 
   // We need pageCount for enforcing limits before doing expensive embedding work.
   const info = await parser.getInfo();
-  const pageCount = info.numPages ?? 0;
+  const pageCount = info.total ?? 0;
 
   if (typeof opts?.maxPages === "number" && pageCount > opts.maxPages) {
     await parser.destroy();

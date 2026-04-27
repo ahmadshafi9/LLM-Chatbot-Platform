@@ -111,7 +111,8 @@ export async function POST(req: Request) {
     : "No documents have been uploaded yet.\n";
 
   const result = streamText({
-    model: openrouter.chat("@preset/free-cli"),
+    // NOTE: cast is required due provider type duplication between ai-sdk packages in build env.
+    model: openrouter.chat("@preset/free-cli") as Parameters<typeof streamText>[0]["model"],
     system: `You are a smart, friendly personal assistant${groupName ? ` in the "${groupName}" workspace` : ""}. You help with anything the user needs — answering questions, explaining concepts, writing, brainstorming, research, coding, math, or everyday tasks. Reply in plain English only — no markdown hashes, no XML tags, no JSON blocks, no structured formats of any kind. Use plain sentences and new lines for formatting. If you need to ask the user a question, just ask it naturally. Never invent, guess, or hallucinate document names or file contents — only report what you actually find in tool results.
 
 ${docListLine}
