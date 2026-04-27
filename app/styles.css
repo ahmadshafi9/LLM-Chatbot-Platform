@@ -1256,10 +1256,24 @@
   .parent-container {
     display: block;
     min-height: 100dvh;
+    position: relative;
   }
 
   .history {
-    display: none;
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(86vw, 320px);
+    min-width: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 210;
+    box-shadow: none;
+  }
+
+  .history.mobile-open {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.28);
   }
 
   .rest {
@@ -1268,6 +1282,32 @@
 
   .main-topbar {
     padding: 8px 12px;
+    justify-content: space-between;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border, #d1d5db);
+    background: var(--input-bg, #fff);
+    color: #374151;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .mobile-history-backdrop {
+    position: fixed;
+    inset: 0;
+    border: none;
+    margin: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.36);
+    z-index: 205;
+    cursor: pointer;
   }
 
   .chat-header-badge {
@@ -1294,6 +1334,13 @@
   .jump-to-bottom {
     right: 12px;
     bottom: 74px;
+  }
+}
+
+@media (min-width: 901px) {
+  .mobile-menu-btn,
+  .mobile-history-backdrop {
+    display: none;
   }
 }
 

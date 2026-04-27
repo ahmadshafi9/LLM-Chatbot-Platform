@@ -196,6 +196,7 @@ function streamingStatusHint(last: UIMessage | undefined): string {
 export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: string }) {
   const [activeChatId, setActiveChatId] = useState<string | undefined>();
   const [allChats, setAllChats] = useState<{ chatId: number; title: string; group_name?: string }[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [deviceId] = useState<string>(() => getOrCreateDeviceId());
   const ownerIdRef = useRef<string>("");
   const [input, setInput] = useState("");
@@ -594,7 +595,7 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
 
   return (
     <div className="parent-container">
-      <aside className="history">
+      <aside className={`history${mobileMenuOpen ? " mobile-open" : ""}`}>
         <div className="history-header">
           <a href="/" className="back-home-btn" title="Back to groups">
             ← Groups
@@ -602,7 +603,10 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
           <button
             type="button"
             className="new-chat-btn"
-            onClick={() => setActiveChatId(undefined)}
+            onClick={() => {
+              setActiveChatId(undefined);
+              setMobileMenuOpen(false);
+            }}
             title="New chat"
           >
             + New
@@ -701,6 +705,7 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
                   } else {
                     setSelectedGroup(null);
                   }
+                  setMobileMenuOpen(false);
                 }}
               >
                 <span className="chat-title">{chat.title || "New Chat"}</span>
@@ -746,8 +751,26 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
         )}
       </aside>
 
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          className="mobile-history-backdrop"
+          aria-label="Close menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       <main className="rest">
         <div className="main-topbar">
+          <button
+            type="button"
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            aria-label="Open chats menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            ☰
+          </button>
           <AuthButton />
         </div>
         {selectedGroup && (
