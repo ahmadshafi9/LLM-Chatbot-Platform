@@ -107,16 +107,17 @@ export async function POST(req: Request) {
 
   const docNames = await getIndexedDocNames(groupId);
   const docListLine = docNames.length > 0
-    ? `The following documents have been indexed for this course:\n${docNames.map((n) => `- ${n}`).join("\n")}\n`
-    : "No documents have been indexed for this course yet.\n";
+    ? `The following documents are available to search:\n${docNames.map((n) => `- ${n}`).join("\n")}\n`
+    : "No documents have been uploaded yet.\n";
 
   const result = streamText({
     model: openrouter.chat("@preset/free-cli"),
-    system: `You are a helpful assistant${groupName ? ` for the ${groupName} course` : ""}. Reply in plain English only — no markdown hashes, no XML tags, no JSON blocks, no structured formats of any kind. Use plain sentences and new lines for formatting. If you need to ask the user a question, just ask it naturally in plain text. Never invent, guess, or hallucinate document names or topics — only report what you actually find in tool results.
+    system: `You are a smart, friendly personal assistant${groupName ? ` in the "${groupName}" workspace` : ""}. You help with anything the user needs — answering questions, explaining concepts, writing, brainstorming, research, coding, math, or everyday tasks. Reply in plain English only — no markdown hashes, no XML tags, no JSON blocks, no structured formats of any kind. Use plain sentences and new lines for formatting. If you need to ask the user a question, just ask it naturally. Never invent, guess, or hallucinate document names or file contents — only report what you actually find in tool results.
 
-${groupName ? `${docListLine}\nAlways call lookup_course_materials first for every question to check the uploaded ${groupName} course materials. If the results are relevant, answer from them. If the results are empty or not relevant, tell the user briefly that you could not find this in the course materials, then call search_web and answer from those results.` : `For questions about course content or uploaded materials, use lookup_course_materials first. For general knowledge, current events, or web facts, use search_web. If both could apply, try course materials first.`}`,
+${docListLine}
+Use lookup_documents when the user asks about something that might be in their uploaded files — notes, PDFs, reports, anything they've shared. Use search_web for current events, facts you're unsure about, or anything not covered by uploaded documents. If both could be relevant, check documents first. If neither tool is needed, just answer directly.`,
     messages: convertToModelMessages(messages),
-    tools: { search_web, lookup_course_materials: createLookupTool(groupId ?? null, uploadedBy) },
+    tools: { search_web, lookup_documents: createLookupTool(groupId ?? null, uploadedBy) },
     stopWhen: stepCountIs(5),
   });
 

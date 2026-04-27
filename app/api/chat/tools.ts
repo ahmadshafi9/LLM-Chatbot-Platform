@@ -69,35 +69,35 @@ export const search_web = tool({
 });
 
 /**
- * Returns a lookup_course_materials tool scoped to the given group.
- * Pass groupId=null to search across all groups (general mode).
+ * Returns a lookup_documents tool scoped to the given group.
+ * Pass groupId=null to search across all groups.
  */
 export function createLookupTool(groupId?: string | null, uploadedBy?: string | null) {
   return tool({
     description:
-      "Search course materials (PDFs and indexed class content). Use when the user asks about lectures, homework, topics covered in their course PDFs, or anything answerable from their uploaded course documents—not for general web trivia.",
+      "Search the user's uploaded documents (PDFs, notes, reports, or any indexed files). Use when the user asks about something that might be in their files — not for general web facts or current events.",
     inputSchema: z.object({
-      course_search_terms: z
+      search_terms: z
         .string()
         .describe(
-          "Search query for the vector DB (e.g. 'midterm date', 'LU factorization')."
+          "Search query for the vector DB (e.g. 'project deadline', 'budget summary', 'chapter 3 notes')."
         ),
     }),
-    execute: async ({ course_search_terms }) => {
+    execute: async ({ search_terms }) => {
       try {
         const results = await searchCourseMaterials(
-          course_search_terms,
+          search_terms,
           5,
           groupId ?? null,
           uploadedBy ?? null
         );
-        return JSON.stringify({ query: course_search_terms, chunks: results });
+        return JSON.stringify({ query: search_terms, chunks: results });
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Course search failed.";
+          err instanceof Error ? err.message : "Document search failed.";
         return JSON.stringify({
           error: message,
-          query: course_search_terms,
+          query: search_terms,
           chunks: [],
         });
       }
@@ -106,4 +106,4 @@ export function createLookupTool(groupId?: string | null, uploadedBy?: string | 
 }
 
 // Convenience export: searches across all groups
-export const lookup_course_materials = createLookupTool(null);
+export const lookup_documents = createLookupTool(null);

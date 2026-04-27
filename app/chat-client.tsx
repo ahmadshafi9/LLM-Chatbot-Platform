@@ -119,10 +119,10 @@ function toolActivityLabel(part: UIMessage["parts"][number]): string | null {
   if (!isToolOrDynamicToolUIPart(part)) return null;
   const name = getToolOrDynamicToolName(part);
   switch (name) {
-    case "lookup_course_materials":
-      if (part.state === "output-available") return "Read course materials";
-      if (part.state === "output-error") return "Course materials lookup failed";
-      return "Looking up course materials…";
+    case "lookup_documents":
+      if (part.state === "output-available") return "Read uploaded documents";
+      if (part.state === "output-error") return "Document lookup failed";
+      return "Looking up documents…";
     case "search_web":
       if (part.state === "output-available") return "Searched the web";
       if (part.state === "output-error") return "Web search failed";
