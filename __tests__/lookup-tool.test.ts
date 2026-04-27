@@ -21,16 +21,16 @@ describe("createLookupTool", () => {
     mockSearch.mockResolvedValue([]);
     const tool = createLookupTool();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await tool.execute!({ course_search_terms: "lecture" }, {} as never);
-    expect(mockSearch).toHaveBeenCalledWith("lecture", 5, null);
+    await tool.execute!({ search_terms: "lecture" }, {} as never);
+    expect(mockSearch).toHaveBeenCalledWith("lecture", 5, null, null);
   });
 
   it("calls searchCourseMaterials with the given groupId", async () => {
     mockSearch.mockResolvedValue([]);
     const tool = createLookupTool("group-abc");
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await tool.execute!({ course_search_terms: "midterm" }, {} as never);
-    expect(mockSearch).toHaveBeenCalledWith("midterm", 5, "group-abc");
+    await tool.execute!({ search_terms: "midterm" }, {} as never);
+    expect(mockSearch).toHaveBeenCalledWith("midterm", 5, "group-abc", null);
   });
 
   it("returns JSON with chunks on success", async () => {
@@ -39,7 +39,7 @@ describe("createLookupTool", () => {
     ]);
     const tool = createLookupTool("grp-1");
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const result = await tool.execute!({ course_search_terms: "topic" }, {} as never);
+    const result = await tool.execute!({ search_terms: "topic" }, {} as never);
     const parsed = JSON.parse(result as string);
     expect(parsed.chunks).toHaveLength(1);
     expect(parsed.chunks[0].content).toBe("Some content");
@@ -49,7 +49,7 @@ describe("createLookupTool", () => {
     mockSearch.mockRejectedValue(new Error("Search failure"));
     const tool = createLookupTool("grp-x");
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const result = await tool.execute!({ course_search_terms: "crash" }, {} as never);
+    const result = await tool.execute!({ search_terms: "crash" }, {} as never);
     const parsed = JSON.parse(result as string);
     expect(parsed.error).toBe("Search failure");
     expect(parsed.chunks).toEqual([]);

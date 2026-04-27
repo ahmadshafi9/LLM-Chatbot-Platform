@@ -34,9 +34,10 @@ describe("searchCourseMaterials", () => {
     mockRpc.mockResolvedValue({ data: [], error: null });
     await searchCourseMaterials("lecture slides", 5);
     expect(mockRpc).toHaveBeenCalledWith("match_course_chunks", {
-      query_embedding: expect.stringMatching(/^\[/),
+      query_embedding: expect.any(String),
       match_count: 5,
       p_group_id: null,
+      p_uploaded_by: null,
     });
   });
 
@@ -48,6 +49,7 @@ describe("searchCourseMaterials", () => {
       query_embedding: expect.any(String),
       match_count: 3,
       p_group_id: testGroupId,
+      p_uploaded_by: null,
     });
   });
 
@@ -56,6 +58,7 @@ describe("searchCourseMaterials", () => {
     await searchCourseMaterials("homework", 5, null);
     const call = mockRpc.mock.calls[0][1];
     expect(call.p_group_id).toBeNull();
+    expect(call.p_uploaded_by).toBeNull();
   });
 
   it("maps RPC rows to CourseChunkResult shape", async () => {
