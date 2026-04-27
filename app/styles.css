@@ -1251,3 +1251,49 @@
   cursor: pointer;
 }
 
+/* Mobile chat layout: disable desktop split-pane offsets */
+@media (max-width: 900px) {
+  .parent-container {
+    display: block;
+    min-height: 100dvh;
+  }
+
+  .history {
+    display: none;
+  }
+
+  .rest {
+    height: 100dvh;
+  }
+
+  .main-topbar {
+    padding: 8px 12px;
+  }
+
+  .chat-header-badge {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+  }
+
+  .chat {
+    padding: 12px 12px 96px;
+    gap: 12px;
+  }
+
+  .chatUser,
+  .chatAI {
+    max-width: 92%;
+  }
+
+  .input-form {
+    left: 0;
+    right: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .jump-to-bottom {
+    right: 12px;
+    bottom: 74px;
+  }
+}
+
