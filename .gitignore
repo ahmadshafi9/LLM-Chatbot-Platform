@@ -42,5 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 # local sqlite runtime files
+chats.sqlite
 chats.sqlite-shm
 chats.sqlite-wal
+
+# course material uploads (may contain copyrighted content)
+content/

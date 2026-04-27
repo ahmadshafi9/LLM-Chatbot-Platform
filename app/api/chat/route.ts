@@ -57,6 +57,19 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+  if (messages.length > 100) {
+    return NextResponse.json({ error: "Too many messages" }, { status: 400 });
+  }
+  const totalLength = messages.reduce((sum, m) => {
+    const textLen = (m.parts ?? []).reduce(
+      (s, p) => s + (p.type === "text" ? (p as { type: "text"; text: string }).text.length : 0),
+      0
+    );
+    return sum + textLen;
+  }, 0);
+  if (totalLength > 100_000) {
+    return NextResponse.json({ error: "Message content too large" }, { status: 400 });
+  }
 
   const resolvedOwner = ownerId?.trim() || ANONYMOUS_OWNER;
   const uploadedBy = searchScope === "mine" && ownerId ? ownerId : null;

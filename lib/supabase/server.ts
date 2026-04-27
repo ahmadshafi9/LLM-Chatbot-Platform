@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export function getServiceSupabase() {
+let _client: SupabaseClient | null = null;
+
+export function getServiceSupabase(): SupabaseClient {
+  if (_client) return _client;
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url?.trim() || !key?.trim()) {
@@ -8,5 +12,6 @@ export function getServiceSupabase() {
       "Missing SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) or SUPABASE_SERVICE_ROLE_KEY"
     );
   }
-  return createClient(url, key);
+  _client = createClient(url, key);
+  return _client;
 }

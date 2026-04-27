@@ -48,8 +48,11 @@ export async function POST(req: Request) {
   }
 
   const ingestHash = getIngestHash(buf);
-  const sourceLabel = file.name;
-  const filename = file.name;
+  // Sanitize filename: keep only the basename, strip path separators and
+  // control characters, truncate to 200 chars.
+  const rawName = path.basename(file.name).replace(/[^\w\s.\-]/g, "_").slice(0, 200);
+  const sourceLabel = rawName;
+  const filename = rawName;
   const groupId = (form.get("groupId") as string | null)?.trim() || null;
   const uploadedBy = (form.get("ownerId") as string | null)?.trim() || null;
 
@@ -127,7 +130,12 @@ export async function POST(req: Request) {
       cwd,
       // Inherit Next.js process.env so the child gets Supabase keys, etc.
       // without needing --env-file (which depends on cwd being correct).
-      env: { ...process.env },
+      env: {
+        PATH: process.env.PATH,
+        SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        VOYAGEAI_API_KEY: process.env.VOYAGEAI_API_KEY,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     }
   );

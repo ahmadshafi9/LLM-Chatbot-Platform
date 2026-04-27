@@ -49,7 +49,7 @@ export default function AuthButton() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleLinkedInSignIn = async () => {
+  const handleGoogleSignIn = async () => {
     setSigningIn(true);
     setOauthError(null);
     try {
@@ -60,7 +60,7 @@ export default function AuthButton() {
       });
       if (error) throw error;
     } catch (err) {
-      setOauthError(err instanceof Error ? err.message : "LinkedIn sign-in failed.");
+      setOauthError(err instanceof Error ? err.message : "Google sign-in failed.");
       setSigningIn(false);
     }
   };
@@ -140,11 +140,11 @@ export default function AuthButton() {
               <span>or</span>
             </div>
 
-            {/* LinkedIn OAuth */}
+            {/* Google OAuth */}
             <button
               type="button"
               className="auth-oauth-btn"
-              onClick={handleLinkedInSignIn}
+              onClick={handleGoogleSignIn}
               disabled={signingIn}
             >
               <GoogleIcon />
