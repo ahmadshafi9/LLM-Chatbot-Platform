@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LLM Chatbot Platform",
+  title: "My AI",
   description: "AI-powered chatbot with course material search",
 };
 
