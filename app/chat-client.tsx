@@ -202,6 +202,7 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
   const [input, setInput] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const isAtBottomRef = useRef(true);
   const hadNoActiveChatRef = useRef(false);
 
   // Auth state
@@ -399,24 +400,56 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
   useEffect(() => {
     const el = chatRef.current;
     if (!el) return;
-    const onScroll = () => {
+    const computeIsAtBottom = () => {
       const threshold = 50;
-      setIsAtBottom(
-        el.scrollHeight - el.scrollTop - el.clientHeight < threshold
-      );
+      return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     };
+    const syncBottomState = () => {
+      const atBottom = computeIsAtBottom();
+      isAtBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
+    };
+    const onScroll = () => {
+      syncBottomState();
+    };
+    syncBottomState();
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    if (isAtBottom) {
+    if (isAtBottomRef.current) {
       chatRef.current?.scrollTo({
         top: chatRef.current.scrollHeight,
         behavior: "smooth",
       });
     }
-  }, [messages, status, isAtBottom]);
+  }, [messages, status]);
+
+  useEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+    const id = window.requestAnimationFrame(() => {
+      const threshold = 50;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      isAtBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [messages, status, activeChatId, mobileMenuOpen]);
+
+  useEffect(() => {
+    const onResize = () => {
+      const el = chatRef.current;
+      if (!el) return;
+      const threshold = 50;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      isAtBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const { thinkingRowVisible, thinkingRowLabel } = useMemo(() => {
     if (status !== "streaming" && status !== "submitted") {
@@ -858,12 +891,14 @@ export default function ChatClient({ initialGroupSlug }: { initialGroupSlug?: st
           <button
             type="button"
             className="jump-to-bottom"
-            onClick={() =>
+            onClick={() => {
+              isAtBottomRef.current = true;
+              setIsAtBottom(true);
               chatRef.current?.scrollTo({
                 top: chatRef.current.scrollHeight,
                 behavior: "smooth",
-              })
-            }
+              });
+            }}
           >
             Jump to latest ↓
           </button>

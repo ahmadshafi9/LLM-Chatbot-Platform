@@ -110,6 +110,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
     jobId = inserted.id;
+
+    // Mark any prior completed jobs with the same source_label/group/uploader as superseded.
+    // This causes match_course_chunks to exclude their chunks, keeping retrieval clean.
+    // Must filter group_id and uploaded_by explicitly (including IS NULL) to avoid
+    // accidentally superseding jobs that belong to a different group or uploader.
+    let supersede = supabase
+      .from("ingest_jobs")
+      .update({ superseded_by: jobId })
+      .eq("source_label", sourceLabel)
+      .eq("status", "done")
+      .is("superseded_by", null)
+      .neq("id", jobId);
+    supersede = groupId ? supersede.eq("group_id", groupId) : supersede.is("group_id", null);
+    supersede = uploadedBy ? supersede.eq("uploaded_by", uploadedBy) : supersede.is("uploaded_by", null);
+    await supersede;
   }
 
   // Write the PDF to a temp file and run ingest-job.ts in a separate process.

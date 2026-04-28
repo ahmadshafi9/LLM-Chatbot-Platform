@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { searchCourseMaterials } from "@/lib/ai/course-search";
+import { rerankChunks } from "@/lib/ai/rerank";
 
 const BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search";
 
@@ -85,12 +86,14 @@ export function createLookupTool(groupId?: string | null, uploadedBy?: string | 
     }),
     execute: async ({ search_terms }) => {
       try {
-        const results = await searchCourseMaterials(
+        // Fetch more candidates than needed so re-rank has room to filter.
+        const candidates = await searchCourseMaterials(
           search_terms,
-          5,
+          15,
           groupId ?? null,
           uploadedBy ?? null
         );
+        const results = (await rerankChunks(search_terms, candidates)).slice(0, 5);
         return JSON.stringify({ query: search_terms, chunks: results });
       } catch (err) {
         const message =

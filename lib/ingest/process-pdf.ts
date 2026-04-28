@@ -129,6 +129,7 @@ export async function processPdfBuffer(
           ingest_hash: ingestHash,
           ingest_job_id: ingestJobId,
         },
+        ingest_job_id: ingestJobId ?? undefined,
         group_id: groupId,
         uploaded_by: uploadedBy,
       };
