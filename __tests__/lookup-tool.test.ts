@@ -10,6 +10,11 @@ vi.mock("@/lib/ai/course-search", () => ({
   searchCourseMaterials: mockSearch,
 }));
 
+// Pass-through rerank so we can assert raw search behavior without hitting Voyage.
+vi.mock("@/lib/ai/rerank", () => ({
+  rerankChunks: vi.fn(async (_q: string, chunks: unknown[]) => chunks),
+}));
+
 const { createLookupTool } = await import("@/app/api/chat/tools");
 
 describe("createLookupTool", () => {
@@ -22,7 +27,7 @@ describe("createLookupTool", () => {
     const tool = createLookupTool();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     await tool.execute!({ search_terms: "lecture" }, {} as never);
-    expect(mockSearch).toHaveBeenCalledWith("lecture", 5, null, null);
+    expect(mockSearch).toHaveBeenCalledWith("lecture", 15, null, null);
   });
 
   it("calls searchCourseMaterials with the given groupId", async () => {
@@ -30,7 +35,7 @@ describe("createLookupTool", () => {
     const tool = createLookupTool("group-abc");
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     await tool.execute!({ search_terms: "midterm" }, {} as never);
-    expect(mockSearch).toHaveBeenCalledWith("midterm", 5, "group-abc", null);
+    expect(mockSearch).toHaveBeenCalledWith("midterm", 15, "group-abc", null);
   });
 
   it("returns JSON with chunks on success", async () => {
