@@ -2,6 +2,10 @@
 
 A Next.js chatbot app with course-aware retrieval, PDF ingestion, chat history, and Supabase-backed storage.
 
+## Live app
+
+Use the deployed app here: [https://myai-roan.vercel.app/](https://myai-roan.vercel.app/)
+
 ## What it does
 
 - Creates course groups and a general chat workspace.
@@ -49,7 +53,7 @@ Optional variables:
 
 - `BRAVE_API_KEY`: enables web search tool calls from the assistant
 
-## Setup
+## Local development
 
 1. Install dependencies:
 
@@ -80,7 +84,7 @@ npm run migrate
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Then open [http://localhost:3000](http://localhost:3000) for local development.
 
 ## How the app works
 
