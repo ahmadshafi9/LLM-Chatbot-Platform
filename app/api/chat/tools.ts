@@ -93,8 +93,24 @@ export function createLookupTool(groupId?: string | null, uploadedBy?: string | 
           groupId ?? null,
           uploadedBy ?? null
         );
-        const results = (await rerankChunks(search_terms, candidates)).slice(0, 5);
-        return JSON.stringify({ query: search_terms, chunks: results });
+        const reranked = (await rerankChunks(search_terms, candidates)).slice(0, 5);
+        const chunks = reranked.map((c) => {
+          const meta = (c.metadata ?? {}) as Record<string, unknown>;
+          const sourceLabel =
+            (typeof meta.source_label === "string" && meta.source_label) ||
+            (typeof meta.source === "string" && meta.source) ||
+            (typeof meta.file_name === "string" && meta.file_name) ||
+            null;
+          return {
+            content: c.content,
+            source: sourceLabel,
+            relevance_score:
+              typeof c.relevance_score === "number"
+                ? Number(c.relevance_score.toFixed(3))
+                : null,
+          };
+        });
+        return JSON.stringify({ query: search_terms, chunks });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Document search failed.";
